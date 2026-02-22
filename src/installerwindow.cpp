@@ -133,7 +133,7 @@ void InstallerWindow::refreshDriveList() {
 
     const QString output = QString::fromUtf8(lsblk.readAllStandardOutput());
     const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
-    const QRegularExpression sdPartitionPattern("^/dev/sd[a-z]+\\d+$");
+    const QRegularExpression sdDiskOrPartitionPattern("^/dev/sd[a-z]+(?:\\d+)?$");
 
     for (const QString& rawLine : lines) {
         const QString line = rawLine.trimmed();
@@ -151,7 +151,8 @@ void InstallerWindow::refreshDriveList() {
         const QString size = fields.at(2);
         const QString mountPoint = fields.size() > 3 ? fields.at(3) : "<not mounted>";
 
-        if (type != "part" || !sdPartitionPattern.match(device).hasMatch()) {
+        if ((type != "disk" && type != "part")
+            || !sdDiskOrPartitionPattern.match(device).hasMatch()) {
             continue;
         }
 
@@ -166,7 +167,7 @@ void InstallerWindow::refreshDriveList() {
     }
 
     if (driveList_->count() == 0) {
-        driveList_->addItem("No /dev/sdXY partitions were detected.");
+        driveList_->addItem("No /dev/sdX or /dev/sdXY devices were detected.");
     }
 }
 
