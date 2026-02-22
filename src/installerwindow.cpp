@@ -7,6 +7,8 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QProcess>
 #include <QStackedWidget>
 #include <QStorageInfo>
 #include <QVBoxLayout>
@@ -122,38 +124,49 @@ void InstallerWindow::goNext() {
 
 void InstallerWindow::refreshDriveList() {
     driveList_->clear();
+    QProcess lsblk;
+    lsblk.start("lsblk", {"-nrpo", "NAME,TYPE,SIZE,MOUNTPOINT"});
+    if (!lsblk.waitForFinished(3000)) {
+        driveList_->addItem("Failed to query block devices (lsblk timeout).");
+        return;
+    }
 
-    const auto volumes = QStorageInfo::mountedVolumes();
-    for (const QStorageInfo& volume : volumes) {
-        if (!volume.isValid() || !volume.isReady()) {
+    const QString output = QString::fromUtf8(lsblk.readAllStandardOutput());
+    const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+    const QRegularExpression sdPartitionPattern("^/dev/sd[a-z]+\\d+$");
+
+    for (const QString& rawLine : lines) {
+        const QString line = rawLine.trimmed();
+        if (line.isEmpty()) {
             continue;
         }
 
-        const QString device = QString::fromUtf8(volume.device());
-        if (device.isEmpty()) {
+        const QStringList fields = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+        if (fields.size() < 3) {
             continue;
         }
 
-        QString mountPoint = volume.rootPath();
-        if (mountPoint.isEmpty()) {
-            mountPoint = "<no mount point>";
+        const QString device = fields.at(0);
+        const QString type = fields.at(1);
+        const QString size = fields.at(2);
+        const QString mountPoint = fields.size() > 3 ? fields.at(3) : "<not mounted>";
+
+        if (type != "part" || !sdPartitionPattern.match(device).hasMatch()) {
+            continue;
         }
 
-        const qulonglong bytes = volume.bytesTotal();
-        const double gib = static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
-        const QString label = QString("%1  |  mount: %2  |  size: %3 GiB")
-                                  .arg(device, mountPoint, QString::number(gib, 'f', 1));
+        const QString label = QString("%1  |  mount: %2  |  size: %3")
+                                  .arg(device, mountPoint, size);
 
         auto* item = new QListWidgetItem(driveList_);
         driveList_->addItem(item);
-
         auto* checkbox = new QCheckBox(label, driveList_);
         driveList_->setItemWidget(item, checkbox);
         item->setSizeHint(checkbox->sizeHint());
     }
 
     if (driveList_->count() == 0) {
-        driveList_->addItem("No mounted drives were detected.");
+        driveList_->addItem("No /dev/sdXY partitions were detected.");
     }
 }
 
