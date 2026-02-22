@@ -2,10 +2,12 @@
 
 #include <QCheckBox>
 #include <QDir>
+#include <QFile>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QTextStream>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QProcess>
@@ -162,6 +164,10 @@ void InstallerWindow::refreshDriveList() {
         auto* item = new QListWidgetItem(driveList_);
         driveList_->addItem(item);
         auto* checkbox = new QCheckBox(label, driveList_);
+        checkbox->setProperty("devicePath", device);
+        connect(checkbox, &QCheckBox::toggled, this, [this](bool) {
+            writeSelectedDevicesToFile();
+        });
         driveList_->setItemWidget(item, checkbox);
         item->setSizeHint(checkbox->sizeHint());
     }
@@ -169,6 +175,8 @@ void InstallerWindow::refreshDriveList() {
     if (driveList_->count() == 0) {
         driveList_->addItem("No /dev/sdX or /dev/sdXY devices were detected.");
     }
+
+    writeSelectedDevicesToFile();
 }
 
 void InstallerWindow::updateNavButtons() {
@@ -177,4 +185,25 @@ void InstallerWindow::updateNavButtons() {
 
     backButton_->setEnabled(index > 0);
     nextButton_->setText(index == last ? "Done" : "Next");
+}
+
+void InstallerWindow::writeSelectedDevicesToFile() {
+    QFile file("/installer.sh");
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        return;
+    }
+
+    QTextStream out(&file);
+    for (int i = 0; i < driveList_->count(); ++i) {
+        QListWidgetItem* item = driveList_->item(i);
+        auto* checkbox = qobject_cast<QCheckBox*>(driveList_->itemWidget(item));
+        if (!checkbox || !checkbox->isChecked()) {
+            continue;
+        }
+
+        const QString device = checkbox->property("devicePath").toString().trimmed();
+        if (!device.isEmpty()) {
+            out << device << '\n';
+        }
+    }
 }

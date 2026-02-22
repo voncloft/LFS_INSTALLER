@@ -23,6 +23,7 @@ private:
     QWidget* buildWelcomePage();
     QWidget* buildDrivePage();
     void updateNavButtons();
+    void writeSelectedDevicesToFile();
 
     QStackedWidget* pages_ = nullptr;
     QPushButton* backButton_ = nullptr;
